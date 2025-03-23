@@ -2,8 +2,6 @@
 
 A Model Context Protocol (MCP) server that integrates Wordware's powerful agent capabilities with Claude and other MCP-compatible AI assistants.
 
-![Wordware MCP](https://mintlify.s3.us-west-1.amazonaws.com/wordware/images/get-started/api/trigger-api.png)
-
 ## Overview
 
 This project creates a bridge between AI assistants like Claude and Wordware's specialized agent capabilities through Anthropic's Model Context Protocol (MCP). This integration allows Claude to offload specialized tasks to purpose-built Wordware flows for enhanced capabilities.
