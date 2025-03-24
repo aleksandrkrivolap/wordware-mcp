@@ -18,7 +18,7 @@ class WordwareClient:
         """
         self.api_key = api_key or os.environ.get("WORDWARE_API_KEY", "")
         self.api_url = api_url or os.environ.get("WORDWARE_API_URL", "https://api.wordware.ai")
-        self.client = httpx.AsyncClient(timeout=300.0)  # Увеличиваем таймаут до 5 минут для длительных исследований
+        self.client = httpx.AsyncClient(timeout=300.0)  # Increase timeout to 5 minutes for long-running research tasks
         
         # Load configuration
         self.config = self._load_config()
@@ -42,19 +42,19 @@ class WordwareClient:
         Returns:
             Dictionary containing all value events from the stream
         """
-        # Словарь для хранения всех полученных value-событий
+        # Dictionary to store all received value events
         value_events = {}
-        # Словарь для хранения накопленных дельта-событий
+        # Dictionary to store accumulated delta events
         delta_paths = {}
         
-        max_wait_time = 180  # Максимальное время ожидания в секундах
+        max_wait_time = 180  # Maximum wait time in seconds
         start_time = asyncio.get_event_loop().time()
         
         try:
             async with self.client.stream('GET', stream_url) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
-                    # Проверяем, не превышен ли таймаут
+                    # Check if the maximum wait time has been exceeded
                     current_time = asyncio.get_event_loop().time()
                     if current_time - start_time > max_wait_time:
                         print(f"Maximum wait time ({max_wait_time}s) exceeded. Breaking.")
@@ -69,35 +69,35 @@ class WordwareClient:
                             event_data = json.loads(data)
                             event_type = event_data.get("type", "unknown")
                             
-                            # Обработка событий типа 'value'
+                            # Process 'value' type events
                             if event_type == "value":
                                 path = event_data.get("path", "unknown_path")
                                 value = event_data.get("value", {})
                                 value_events[path] = value
                             
-                            # Обработка событий типа 'delta' - на всякий случай, для резервного варианта
+                            # Process 'delta' type events - as a fallback option
                             elif event_type == "delta":
                                 path = event_data.get("path", "")
                                 delta = event_data.get("delta", {})
                                 
-                                # Инициализируем путь, если его еще нет
+                                # Initialize the path if it doesn't exist yet
                                 if path not in delta_paths:
                                     delta_paths[path] = ""
                                 
-                                # Обновляем текст по пути для типа text
+                                # Update the text for this path for 'text' type
                                 if delta.get("type") == "text" and isinstance(delta_paths[path], str):
                                     delta_paths[path] += delta.get("value", "")
                             
-                            # Завершаем обработку при получении события завершения
+                            # End processing when a completion event is received
                             elif event_type == "status" and event_data.get("status") == "completed":
                                 print("Stream completed.")
                                 break
                             
-                            # События завершения с выходными данными
+                            # Completion events with output data
                             elif event_type == "ai.wordware.run.completed.v1":
                                 print("Completion event received.")
                                 if "data" in event_data and "output" in event_data["data"]:
-                                    # Добавляем выходные данные события завершения, если они есть
+                                    # Add completion event output data if available
                                     value_events["completion_output"] = event_data["data"]["output"]
                                 break
                                 
@@ -108,13 +108,13 @@ class WordwareClient:
             print(f"Error processing SSE stream: {e}")
             return {"error": f"Stream error: {e}"}
         
-        # Если нет событий value, но есть накопленные дельты, используем их как резерв
+        # If there are no value events but there are accumulated deltas, use them as a fallback
         if not value_events and delta_paths:
-            # Преобразуем накопленные дельты в формат для вывода
+            # Convert accumulated deltas to output format
             for path, content in delta_paths.items():
                 value_events[path] = content
         
-        # Возвращаем все собранные события типа value
+        # Return all collected value events
         return {"output": value_events}
     
     async def research_person(self, full_name: str, company: str = "", url: str = "") -> Dict[str, Any]:
@@ -192,8 +192,8 @@ class WordwareClient:
         Returns:
             Research results from Wordware
         """
-        # В будущем, когда будет доступен специфический ID для исследования тем,
-        # можно реализовать реальный вызов API. Пока возвращаем моковые данные.
+        # In the future, when a specific ID for topic research is available,
+        # we can implement a real API call. For now, we return mock data.
         return {
             "output": {
                 "research": f"Research on topic: {query}\n\n"
@@ -202,6 +202,70 @@ class WordwareClient:
                            f"for general topic research."
             }
         }
+    
+    async def save_to_notion(self, title: str, body: str) -> Dict[str, Any]:
+        """Save content to Notion using Wordware's integration.
+        
+        Args:
+            title: The title of the Notion page
+            body: The content body of the Notion page
+            
+        Returns:
+            Result of the operation
+        """
+        # Get Notion integration flow ID from config or use default
+        flow_id = self.config.get("notion_integration_flow_id", "55921f92-9374-444b-879a-3a7820a29850")
+        
+        # Prepare the payload using the required API format
+        payload = {
+            "data": {
+                "type": "runs",
+                "attributes": {
+                    "version": "1.0",
+                    "inputs": {
+                        "title": title,
+                        "body": body
+                    },
+                    "webhooks": []
+                }
+            }
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "Accept": "*/*"
+        }
+        
+        try:
+            # Make the API call to initiate the run
+            response = await self.client.post(
+                f"{self.api_url}/v1/apps/{flow_id}/runs",
+                headers=headers,
+                json=payload
+            )
+            
+            response.raise_for_status()
+            run_data = response.json()
+            
+            # Extract the stream URL
+            stream_url = run_data.get("data", {}).get("links", {}).get("stream")
+            
+            if not stream_url:
+                return {"error": "No stream URL in response", "response": run_data}
+            
+            # Process the stream to get all value events
+            print(f"Processing stream for Notion save: {title}")
+            result = await self._process_sse_stream(stream_url)
+            return result
+            
+        except httpx.HTTPStatusError as e:
+            print(f"Error calling Wordware API: {e.response.status_code} {e.response.text}")
+            return {"error": f"API error: {e.response.status_code}", "message": e.response.text}
+        except json.JSONDecodeError as e:
+            return {"error": f"Failed to parse Wordware API response: {e}"}
+        except Exception as e:
+            return {"error": f"Unexpected error: {e}"}
     
     async def close(self):
         """Close the HTTP client."""

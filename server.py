@@ -20,20 +20,20 @@ research_agent = ResearchAgent()
 
 
 @mcp.tool()
-async def research_founder(full_name: str, company: str = "", url: str = "") -> str:
+async def research_founder(full_name: str, company: str, url: str) -> str:
     """
     Research information about a founder or executive.
-    
+
     Args:
-        full_name: The full name of the person to research
-        company: The company the person is associated with (optional)
-        url: A relevant URL for additional context (optional)
-        
+        full_name: The full name of the person to research (required)
+        company: The company the person is associated with (required)
+        url: A relevant URL for additional context (required)
+
     Returns:
         A detailed profile of the person from various sources
     """
-    result = await research_agent.research_person(full_name, company, url)
-    return await research_agent.format_person_research(result)
+    return await research_agent.research_person(full_name, company, url)
+    # return await research_agent.format_person_research(result)
 
 
 @mcp.tool()
@@ -49,6 +49,22 @@ async def research_topic(query: str) -> str:
     """
     results = await research_agent.research_topic(query)
     return await research_agent.format_topic_research(results)
+
+
+@mcp.tool()
+async def save_to_notion(title: str, body: str) -> str:
+    """
+    Save content to a Notion page using Wordware's integration.
+    
+    Args:
+        title: The title of the Notion page
+        body: The content/body of the Notion page (supports Markdown)
+        
+    Returns:
+        Status of the operation and link to the created page if successful
+    """
+    result = await research_agent.save_to_notion(title, body)
+    return await research_agent.format_notion_result(result)
 
 
 def load_config():
