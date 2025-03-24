@@ -18,6 +18,7 @@ mcp = FastMCP("wordware-tools")
 # Initialize our agents
 research_agent = ResearchAgent()
 
+
 @mcp.tool()
 async def research_founder(full_name: str, company: str = "", url: str = "") -> str:
     """
@@ -34,6 +35,7 @@ async def research_founder(full_name: str, company: str = "", url: str = "") -> 
     result = await research_agent.research_person(full_name, company, url)
     return await research_agent.format_person_research(result)
 
+
 @mcp.tool()
 async def research_topic(query: str) -> str:
     """
@@ -48,10 +50,11 @@ async def research_topic(query: str) -> str:
     results = await research_agent.research_topic(query)
     return await research_agent.format_topic_research(results)
 
+
 def load_config():
     """Load configuration from the specified file."""
     config_path = os.environ.get("CONFIG_PATH", "./config.json")
-    
+
     try:
         with open(config_path, "r") as f:
             return json.load(f)
@@ -59,21 +62,22 @@ def load_config():
         print(f"Error loading config from {config_path}: {e}")
         return {}
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the Wordware MCP server")
     parser.add_argument("--transport", choices=["stdio", "sse"], default="stdio",
-                      help="Transport to use (stdio or sse)")
+                        help="Transport to use (stdio or sse)")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind to (for sse transport)")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind to (for sse transport)")
-    
+
     args = parser.parse_args()
-    
+
     config = load_config()
     print(f"Loaded configuration: {config}")
-    
+
     print(f"Starting Wordware MCP server with {args.transport} transport...")
-    
+
     if args.transport == "stdio":
         mcp.run(transport="stdio")
     else:
-        mcp.run(transport="sse", host=args.host, port=args.port) 
+        mcp.run(transport="sse", host=args.host, port=args.port)

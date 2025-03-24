@@ -27,7 +27,7 @@ class ResearchAgent:
         """
         return await self.client.research_person(full_name, company, url)
     
-    async def research_topic(self, query: str) -> List[Dict[str, Any]]:
+    async def research_topic(self, query: str) -> Dict[str, Any]:
         """
         Research a general topic using Wordware's research capabilities.
         
@@ -35,7 +35,7 @@ class ResearchAgent:
             query: The topic or question to research
             
         Returns:
-            Research results as a list of findings
+            Research results as a structured dictionary
         """
         return await self.client.research_topic(query)
     
@@ -52,56 +52,60 @@ class ResearchAgent:
         if "error" in result:
             return f"Error performing research: {result.get('error', 'Unknown error')}"
         
-        # In a real implementation, you would parse the specific structure
-        # of the Wordware API response. This is a simplified example.
+        # Проверяем наличие выходных данных
+        if "output" not in result:
+            return f"No research output available. Raw response: {json.dumps(result, indent=2)}"
         
-        # If we have actual output from the API, format it
-        if "output" in result:
-            output = result["output"]
-            # Format depends on actual API response structure
-            if isinstance(output, dict):
-                # Try to extract common fields that might be in the response
-                bio = output.get("biography", "No biography available")
-                experience = output.get("experience", [])
-                education = output.get("education", [])
-                
-                formatted = f"# Research Results\n\n"
-                formatted += f"## Biography\n{bio}\n\n"
-                
-                if experience:
-                    formatted += "## Professional Experience\n"
-                    for exp in experience:
-                        if isinstance(exp, dict):
-                            role = exp.get("role", "Unknown role")
-                            company = exp.get("company", "Unknown company")
-                            period = exp.get("period", "")
-                            formatted += f"- {role} at {company} {period}\n"
-                        else:
-                            formatted += f"- {exp}\n"
-                    formatted += "\n"
-                
-                if education:
-                    formatted += "## Education\n"
-                    for edu in education:
-                        if isinstance(edu, dict):
-                            degree = edu.get("degree", "")
-                            institution = edu.get("institution", "")
-                            year = edu.get("year", "")
-                            formatted += f"- {degree} from {institution} {year}\n"
-                        else:
-                            formatted += f"- {edu}\n"
-                    formatted += "\n"
-                
-                return formatted
+        output = result["output"]
+        
+        # Форматируем ответ в виде Markdown
+        formatted = "# Research Results\n\n"
+        
+        # Подготовим словарь конкретных секций, которые нам нужно форматировать особым образом
+        special_sections = {
+            "questions": "## Interview Questions",
+            "Web search with Exa.researchRCompany": "## Company Overview",
+            "Web search with Exa.researchRCompany.finalresearchCompany": "## Company Research",
+            "Website similarity search.competitionfull.competitionfullSonar.finalcompetitonanalysis": "## Competition Analysis",
+            "completion_output": "## Analysis"
+        }
+        
+        # Сначала обработаем специальные секции в определенном порядке, если они есть
+        special_keys = list(set(special_sections.keys()) & set(output.keys()))
+        special_keys.sort(key=lambda k: list(special_sections.keys()).index(k) if k in special_sections else 999)
+        
+        for key in special_keys:
+            section_title = special_sections.get(key, f"## {key.replace('_', ' ').title()}")
+            content = output[key]
             
-            # If output is a string, return it directly
-            elif isinstance(output, str):
-                return output
+            formatted += f"{section_title}\n\n"
+            if isinstance(content, str):
+                formatted += f"{content}\n\n"
+            elif isinstance(content, dict) and "generation" in content:
+                # Специальная обработка для формата с "generation"
+                formatted += f"{content['generation']}\n\n"
+            else:
+                # Выводим JSON для структурированных данных
+                formatted += f"```json\n{json.dumps(content, indent=2)}\n```\n\n"
         
-        # Fallback to returning the raw JSON
-        return f"Research results:\n\n{json.dumps(result, indent=2)}"
+        # Затем обработаем все остальные ключи
+        other_keys = list(set(output.keys()) - set(special_keys))
+        
+        if other_keys:
+            formatted += "## Additional Information\n\n"
+            
+            for key in other_keys:
+                content = output[key]
+                formatted += f"### {key.replace('_', ' ').title()}\n\n"
+                
+                if isinstance(content, str):
+                    formatted += f"{content}\n\n"
+                else:
+                    formatted += f"```json\n{json.dumps(content, indent=2)}\n```\n\n"
+        
+        return formatted
     
-    async def format_topic_research(self, results: List[Dict[str, Any]]) -> str:
+    async def format_topic_research(self, results: Dict[str, Any]) -> str:
         """
         Format topic research results into readable text.
         
@@ -111,23 +115,38 @@ class ResearchAgent:
         Returns:
             Formatted research results as text
         """
-        if not results:
-            return "No research results found."
-        
-        formatted = "# Research Findings\n\n"
-        
-        for i, result in enumerate(results, 1):
-            title = result.get("title", "Untitled")
-            snippet = result.get("snippet", "No details available")
-            url = result.get("url", "")
+        if "error" in results:
+            return f"Error performing research: {results.get('error', 'Unknown error')}"
             
-            formatted += f"## {i}. {title}\n"
-            formatted += f"{snippet}\n"
-            if url:
-                formatted += f"Source: {url}\n"
-            formatted += "\n"
+        if "output" not in results:
+            return f"No research output available. Raw response: {json.dumps(results, indent=2)}"
+            
+        output = results["output"]
         
-        return formatted
+        # Если output это строка
+        if isinstance(output, str):
+            return output
+            
+        # Если output это словарь
+        if isinstance(output, dict):
+            # Если есть поле research
+            if "research" in output:
+                return f"# Research on Topic\n\n{output['research']}"
+                
+            # Другие случаи
+            formatted = "# Research Findings\n\n"
+            
+            for key, value in output.items():
+                formatted += f"## {key.replace('_', ' ').title()}\n"
+                if isinstance(value, str):
+                    formatted += f"{value}\n\n"
+                else:
+                    formatted += f"```json\n{json.dumps(value, indent=2)}\n```\n\n"
+            
+            return formatted
+            
+        # Если ничего не подошло, возвращаем сырой JSON
+        return f"Research results:\n\n{json.dumps(results, indent=2)}"
     
     async def close(self):
         """Clean up resources."""
