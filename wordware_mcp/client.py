@@ -327,8 +327,10 @@ class WordwareClient:
         logger.info(f"Starting generic tool execution for tool_id: {tool_id}")
         logger.info(f"Input parameters: {inputs}")
 
+        # Extract parameters from nested structure if needed
         actual_inputs = inputs
 
+        # If data comes in the format {"kwargs": {...}}, use the contents of the kwargs field
         if len(inputs) == 1 and "kwargs" in inputs and isinstance(inputs["kwargs"], dict):
             actual_inputs = inputs["kwargs"]
             logger.info(f"Extracted actual inputs from kwargs: {actual_inputs}")
@@ -354,7 +356,7 @@ class WordwareClient:
         }
         
         try:
-            # Создаем новый клиент для каждого запроса
+            # Create a new client for each request
             async with httpx.AsyncClient(timeout=300.0) as request_client:
                 # Make the API call to initiate the run
                 logger.info(f"Sending POST request to: {self.api_url}/v1/apps/{tool_id}/runs")

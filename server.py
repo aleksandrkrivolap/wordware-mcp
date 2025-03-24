@@ -100,11 +100,11 @@ class DynamicMCPServer:
             description = attributes.get("description", "")
             input_schema = attributes.get("inputSchema", {})
             
-            # Определим, следует ли извлечь свойства из вложенного объекта "kwargs"
+            # Check if we need to extract properties from the nested "kwargs" object
             properties = input_schema.get("properties", {})
             
-            # Если в свойствах есть только одно поле "kwargs" и оно содержит объект с properties,
-            # то используем его свойства напрямую
+            # If there is only one field "kwargs" in properties and it contains an object with properties,
+            # we'll use its properties directly
             has_kwargs_wrapper = False
             kwargs_properties = None
             
@@ -113,7 +113,7 @@ class DynamicMCPServer:
                 if kwargs_properties:
                     logger.info(f"Tool {tool_id} has kwargs wrapper in schema, extracting inner properties")
                     has_kwargs_wrapper = True
-                    # Запомним, что нужно оборачивать параметры в kwargs при вызове
+                    # Remember that we need to wrap parameters in kwargs when calling
                     self.tools_cache[tool_id] = {
                         "id": tool_id,
                         "name": tool_name,
@@ -184,10 +184,12 @@ class DynamicMCPServer:
                     processed_inputs[clean_key] = clean_value
             
             logger.info(f"Processed inputs: {processed_inputs}")
-
+            
+            # Check if this tool requires kwargs wrapper
             tool_info = self.tools_cache.get(tool_id, {})
             requires_kwargs_wrapper = tool_info.get("requires_kwargs_wrapper", False)
-
+            
+            # If the tool requires wrapping, wrap parameters in kwargs
             if requires_kwargs_wrapper:
                 final_inputs = {"kwargs": processed_inputs}
                 logger.info(f"Tool {tool_name} requires kwargs wrapper. Final inputs: {final_inputs}")
@@ -392,7 +394,6 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Настраиваем уровень логирования
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
         logger.setLevel(logging.DEBUG)

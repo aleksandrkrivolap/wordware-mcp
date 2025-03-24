@@ -4,14 +4,14 @@ A Model Context Protocol (MCP) server that integrates Wordware's powerful agent 
 
 ## Overview
 
-This project creates a bridge between AI assistants like Claude and Wordware's specialized agent capabilities through Anthropic's Model Context Protocol (MCP). This integration allows Claude to offload specialized tasks to purpose-built Wordware flows for enhanced capabilities.
+This project creates a bridge between AI assistants like Claude and Wordware's specialized agent capabilities through Anthropic's Model Context Protocol (MCP). The integration dynamically loads tools from Wordware API based on configuration, allowing Claude to access any specialized Wordware flow.
 
 ## Features
 
-- **🔍 Research Agent** - Delegate in-depth research tasks to specialized Wordware flows
-- **📝 Notion Saver** - Save AI assistant outputs directly to Notion via Wordware
-- **🤔 ReAct Agent** - Enable deeper reflection on complex problems through Wordware's ReAct pattern
-- **⏱️ Asynchronous Tools** - Support for long-running operations with status checks
+- **🔄 Dynamic Tool Loading** - Automatically loads tools from Wordware API based on configuration
+- **🧠 Intelligent Schema Detection** - Automatically detects and adapts to different tool input schemas
+- **🔍 Advanced Parameter Processing** - Handles various input formats (JSON, nested structures, strings)
+- **⚙️ Robust Error Handling** - Comprehensive error logging and event loop management
 - **🔑 Simple Authentication** - Easy setup to connect your Wordware account
 
 ## Prerequisites
@@ -41,122 +41,117 @@ cp .env.example .env
 
 ## Configuration
 
-Create a `config.json` file with the following structure:
+Create a `tools_config.json` file with the following structure:
 
 ```json
 {
-  "research_flow_id": "your-research-flow-id",
-  "notion_flow_id": "your-notion-flow-id",
-  "react_flow_id": "your-react-flow-id",
-  "notion_database_id": "your-default-notion-database-id"
+  "tools": [
+    {
+      "id": "your-tool-id-1"
+    },
+    {
+      "id": "your-tool-id-2"
+    },
+    {
+      "id": "your-tool-id-3"
+    }
+  ]
 }
 ```
 
-Or set the path to your configuration file using the `CONFIG_PATH` environment variable.
+You can specify any Wordware tool ID in this configuration file, and the server will dynamically load and register them as MCP tools. The tool metadata, including input schema and description, will be fetched directly from the Wordware API.
+
+To specify a custom configuration file path, use the `CONFIG_PATH` environment variable.
 
 ## Running the Server
 
 ```bash
-# Run directly
+# Run with default settings
 python server.py
 
-# Or using the MCP CLI
-mcp run server.py
+# Run with debug logging
+python server.py --debug
+
+# Run with SSE transport on a specific port
+python server.py --transport sse --host 127.0.0.1 --port 8000
 
 # Or install in Claude Desktop
-mcp install server.py --name "Wordware Tools"
-```
-
-## Usage Examples
-
-### Research Agent
-
-Use Claude to delegate research tasks to specialized Wordware agents:
-
-```
-User: "Research the funding history of Anthropic"
-Claude: "I'll use the Wordware Research Agent to find detailed information..."
-[Claude processes this through Wordware's specialized research flow]
-Claude: "According to my research, Anthropic has received funding from..."
-```
-
-### Notion Integration
-
-Save content directly to your Notion workspace:
-
-```
-User: "Save this meeting summary to my Notion workspace"
-Claude: "I'll save that for you using the Wordware Notion integration..."
-[Claude sends content to Wordware, which handles the Notion API interaction]
-Claude: "Your meeting summary has been saved to your Notion workspace"
-```
-
-### ReAct Agent
-
-Leverage advanced reasoning capabilities:
-
-```
-User: "I need to solve this complex problem about optimizing our customer support workflow"
-Claude: "Let me think through this carefully using the ReAct framework..."
-[Claude delegates to Wordware's ReAct agent for step-by-step reasoning]
-Claude: "After careful analysis, here's my recommendation..."
+mcp install python server.py --name "Wordware Tools"
 ```
 
 ## How It Works
 
-This project leverages the official MCP Python SDK to create a server that exposes Wordware's capabilities as MCP tools:
+The Wordware MCP server operates as follows:
 
-1. **Tool Registration** - Publishing available Wordware flows as MCP tools
-2. **Request Processing** - Converting MCP tool calls to Wordware API requests
-3. **Asynchronous Operations** - Managing long-running tasks with status updates
-4. **Authentication** - Securely handling user credentials for both services
+1. **Tool Configuration Loading** - Reads the list of tool IDs from the configuration file
+2. **Dynamic Tool Registration** - For each tool ID:
+   - Fetches metadata from the Wordware API
+   - Detects input schema requirements
+   - Creates a corresponding MCP tool function
+   - Registers the tool with the MCP server
+3. **Request Processing** - When a tool is called:
+   - Processes input parameters in various formats (JSON objects, strings, nested structures)
+   - Adapts parameters format based on tool requirements
+   - Sends the properly formatted request to the Wordware API
+4. **Response Handling** - Processes Wordware API responses:
+   - Parses the Server-Sent Events (SSE) stream
+   - Collects all output values
+   - Formats the response for Claude in a user-friendly way
 
-## Development
+## Advanced Features
 
-### Project Structure
+### Intelligent Parameter Handling
 
-```
-wordware-mcp/
-├── wordware_mcp/
-│   ├── client.py         # Wordware API client
-│   ├── tools/            # MCP tool implementations
-│   │   ├── research.py   # Research agent
-│   │   ├── notion.py     # Notion integration
-│   │   └── react.py      # ReAct agent
-├── server.py             # MCP server using the Python SDK
-├── .env.example          # Example environment variables
-└── config.json           # Configuration file
-```
+The server automatically handles different input parameter formats:
 
-### Adding New Tools
+- Direct parameters: `{"Full Name": "John Doe", "Company": "Acme Inc."}`
+- JSON string in kwargs: `{"kwargs": "{\"Full Name\": \"John Doe\", \"Company\": \"Acme Inc.\"}"}`
+- Nested parameters: `{"kwargs": {"Full Name": "John Doe", "Company": "Acme Inc."}}`
 
-To create a new tool that integrates with a Wordware flow:
+### Input Schema Detection
 
-1. Create a new Python file in the `wordware_mcp/tools` directory
-2. Implement a class that extends the `Tool` class from `mcp.server.fastmcp`
-3. Register your tool in `server.py`
+The server analyzes each tool's input schema to determine the correct format:
+- Detects if a tool requires parameters wrapped in a `kwargs` object
+- Extracts inner properties for better documentation
+- Adapts the parameter format for each tool automatically
 
-## MCP Protocol Implementation
+### Error Handling and Recovery
 
-This project implements the MCP protocol as specified in the [official documentation](https://modelcontextprotocol.io/). It provides:
-
-- Tool discovery via the `/.well-known/mcp-tools` endpoint
-- JSON schema definitions for each tool
-- Proper handling of both synchronous and asynchronous tool patterns
+Robust error handling includes:
+- Event loop monitoring and recovery
+- Detailed logging of all requests and responses
+- Graceful handling of HTTP errors and timeouts
+- Comprehensive error messages for troubleshooting
 
 ## Troubleshooting
 
 - **Tool not showing in Claude Desktop**: Ensure the server is running and properly registered in Claude Desktop settings
 - **Authentication errors**: Check that your Wordware API key is correctly set in the `.env` file
-- **Flow execution failures**: Verify that the flow IDs in your configuration match the actual flows in your Wordware account
+- **Parameter validation errors**: Verify the input format matches the tool's requirements
+- **Event loop errors**: If you see "Event loop is closed" errors, try restarting the server
+
+## Development
+
+To extend or modify the server:
+
+```bash
+# Run with debug logging
+python server.py --debug
+
+# Check the logs for detailed information
+tail -f /path/to/your/logs/mcp.log
+```
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgements
 
 - [Anthropic](https://www.anthropic.com/) for the Model Context Protocol
 - [Wordware](https://wordware.ai/) for their agent platform
-- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) for the protocol implementation
+- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) for the protocol implementation 
